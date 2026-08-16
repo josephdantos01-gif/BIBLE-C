@@ -31,7 +31,7 @@
   }
 
   // ============================================================
-  // LIBROS DE LA BIBLIA zs
+  // LIBROS DE LA BIBLIA
   // ============================================================
   const OLD_BOOKS = [
     "Génesis","Éxodo","Levítico","Números","Deuteronomio",
@@ -84,6 +84,7 @@
     wrongPenalty: 75,
 
     levelEvery: 8,
+    soloSwitchEvery: 6,
     starDuration: 7000,
     clockDuration: 5000
   };
@@ -127,6 +128,12 @@
   let nextSpawn = CONFIG.spawnBase;
   let elapsed = 0;
   let slowUntil = 0;
+
+  // Modo 1 jugador: una sola Biblia cambia de objetivo
+  // entre Antiguo y Nuevo Testamento.
+  let soloTarget = "old";
+  let soloTargetCaught = 0;
+  let targetBannerUntil = 0;
 
   const keys = new Set();
 
@@ -190,11 +197,37 @@
   // JUGADORES / BIBLIAS
   // ============================================================
   function createPlayers() {
+    if (gameMode === 1) {
+      players = [
+        {
+          id: 1,
+          testament: soloTarget,
+          label: "1 JUGADOR",
+          x: W / 2 - CONFIG.bibleWidth / 2,
+          y: CONFIG.bibleY,
+          w: CONFIG.bibleWidth,
+          h: CONFIG.bibleHeight,
+          leftKey: "KeyA",
+          rightKey: "KeyD",
+          altLeftKey: "ArrowLeft",
+          altRightKey: "ArrowRight",
+          score: 0,
+          lives: CONFIG.startLives,
+          streak: 0,
+          shield: 0,
+          starUntil: 0,
+          flashUntil: 0,
+          alive: true
+        }
+      ];
+      return;
+    }
+
     players = [
       {
         id: 1,
         testament: "old",
-        label: gameMode === 2 ? "JUGADOR 1" : "ANTIGUO",
+        label: "JUGADOR 1",
         x: W * 0.24 - CONFIG.bibleWidth / 2,
         y: CONFIG.bibleY,
         w: CONFIG.bibleWidth,
@@ -206,12 +239,13 @@
         streak: 0,
         shield: 0,
         starUntil: 0,
-        flashUntil: 0
+        flashUntil: 0,
+        alive: true
       },
       {
         id: 2,
         testament: "new",
-        label: gameMode === 2 ? "JUGADOR 2" : "NUEVO",
+        label: "JUGADOR 2",
         x: W * 0.76 - CONFIG.bibleWidth / 2,
         y: CONFIG.bibleY,
         w: CONFIG.bibleWidth,
@@ -223,9 +257,49 @@
         streak: 0,
         shield: 0,
         starUntil: 0,
-        flashUntil: 0
+        flashUntil: 0,
+        alive: true
       }
     ];
+  }
+
+  function testamentCompleted(testament) {
+    const list = testament === "old" ? OLD_BOOKS : NEW_BOOKS;
+    return list.every(name => completed.has(name));
+  }
+
+  function switchSoloTarget(now, force = false) {
+    if (gameMode !== 1 || !players[0]) return;
+
+    const currentDone = testamentCompleted(soloTarget);
+    const other = soloTarget === "old" ? "new" : "old";
+    const otherDone = testamentCompleted(other);
+
+    if (currentDone && otherDone) return;
+
+    if (!force && soloTargetCaught < CONFIG.soloSwitchEvery && !currentDone) return;
+
+    if (!otherDone) {
+      soloTarget = other;
+    } else if (!currentDone) {
+      // El otro ya está completo; continuamos con el actual.
+      soloTarget = soloTarget;
+    }
+
+    soloTargetCaught = 0;
+    players[0].testament = soloTarget;
+    targetBannerUntil = now + 2200;
+
+    floatingTexts.push({
+      x: W / 2,
+      y: H * 0.36,
+      text: soloTarget === "old"
+        ? "OBJETIVO: ANTIGUO TESTAMENTO"
+        : "OBJETIVO: NUEVO TESTAMENTO",
+      life: 1600,
+      maxLife: 1600,
+      kind: "level"
+    });
   }
 
   function playerMultiplier(player, now) {
@@ -251,7 +325,34 @@
     touchControls.classList.add("active");
     touchControls.setAttribute("aria-hidden", "false");
 
+    if (gameMode === 1) {
+      soloTarget = Math.random() < 0.5 ? "old" : "new";
+      soloTargetCaught = 0;
+      targetBannerUntil = performance.now() + 2600;
+    }
+
     createPlayers();
+
+    const oldTouchGroup = document.querySelector(".touch-group.old");
+    const newTouchGroup = document.querySelector(".touch-group.new");
+
+    if (gameMode === 1) {
+      if (oldTouchGroup) {
+        oldTouchGroup.style.display = "grid";
+        const label = oldTouchGroup.querySelector("span");
+        if (label) label.textContent = "MOVER";
+      }
+      if (newTouchGroup) newTouchGroup.style.display = "none";
+      touchControls.style.justifyContent = "center";
+    } else {
+      if (oldTouchGroup) {
+        oldTouchGroup.style.display = "grid";
+        const label = oldTouchGroup.querySelector("span");
+        if (label) label.textContent = "ANTIGUO";
+      }
+      if (newTouchGroup) newTouchGroup.style.display = "grid";
+      touchControls.style.justifyContent = "space-between";
+    }
     fallingBooks = [];
     powerUps = [];
     particles = [];
@@ -284,7 +385,7 @@
     touchControls.setAttribute("aria-hidden", "true");
   }
 
-  function endGame(victory = false) {
+  function endGame(victory = false, reason = "lives") {
     state = "end";
     keys.clear();
 
@@ -293,11 +394,24 @@
     const best = Math.max(oldBest, totalScore);
     localStorage.setItem(getBestKey(), String(best));
 
-    endKicker.textContent = victory ? "¡MISIÓN COMPLETADA!" : "FIN DE LA PARTIDA";
-    endTitle.textContent = victory ? "BIBLE COMPLETE!" : "GAME OVER";
-    endMessage.textContent = victory
-      ? "¡Completaste los 66 libros de la Biblia!"
-      : "Vuelve a intentarlo y completa todos los libros.";
+    if (victory) {
+      endKicker.textContent = "¡MISIÓN COMPLETADA!";
+      endTitle.textContent = "BIBLE COMPLETE!";
+      endMessage.textContent = "¡Completaste los 66 libros de la Biblia!";
+    } else if (reason === "survivor-complete") {
+      endKicker.textContent = "FIN DE LA RONDA";
+      endTitle.textContent = "¡BUEN TRABAJO!";
+      endMessage.textContent =
+        "El jugador que quedó activo completó todos los libros de su Testamento.";
+    } else if (gameMode === 2) {
+      endKicker.textContent = "FIN DE LA PARTIDA";
+      endTitle.textContent = "GAME OVER";
+      endMessage.textContent = "Los dos jugadores quedaron eliminados.";
+    } else {
+      endKicker.textContent = "FIN DE LA PARTIDA";
+      endTitle.textContent = "GAME OVER";
+      endMessage.textContent = "Te quedaste sin vidas. ¡Inténtalo de nuevo!";
+    }
 
     finalScore.textContent = formatScore(totalScore);
     bestScoreEl.textContent = formatScore(best);
@@ -436,14 +550,34 @@
 
     maybeSpawnPowerUp();
 
+    if (gameMode === 1) {
+      soloTargetCaught += 1;
+      switchSoloTarget(now);
+    }
+
     if (totalCompleted >= 66) {
       setTimeout(() => {
         if (state === "playing") endGame(true);
       }, 450);
+      return;
+    }
+
+    if (gameMode === 2) {
+      const alivePlayers = players.filter(p => p.alive);
+      if (
+        alivePlayers.length === 1 &&
+        testamentCompleted(alivePlayers[0].testament)
+      ) {
+        setTimeout(() => {
+          if (state === "playing") endGame(false, "survivor-complete");
+        }, 550);
+      }
     }
   }
 
   function takeDamage(player, reason, x, y) {
+    if (!player || !player.alive) return;
+
     player.streak = 0;
 
     if (player.shield > 0) {
@@ -470,9 +604,48 @@
     });
 
     if (player.lives <= 0) {
-      setTimeout(() => {
-        if (state === "playing") endGame(false);
-      }, 250);
+      player.lives = 0;
+      player.alive = false;
+      player.shield = 0;
+      player.starUntil = 0;
+
+      floatingTexts.push({
+        x: player.x + player.w / 2,
+        y: player.y - 10,
+        text: "ELIMINADO",
+        life: 1800,
+        maxLife: 1800,
+        kind: "bad"
+      });
+
+      if (gameMode === 1) {
+        setTimeout(() => {
+          if (state === "playing") endGame(false);
+        }, 650);
+        return;
+      }
+
+      // En 2 jugadores, la Biblia eliminada queda gris en pantalla.
+      // Sus libros dejan de aparecer para que el jugador restante
+      // pueda continuar su propia partida.
+      fallingBooks = fallingBooks.filter(
+        book => book.testament !== player.testament
+      );
+      queue = queue.filter(
+        book => book.testament !== player.testament
+      );
+
+      const alivePlayers = players.filter(p => p.alive);
+
+      if (alivePlayers.length === 0) {
+        setTimeout(() => {
+          if (state === "playing") endGame(false);
+        }, 800);
+      } else if (testamentCompleted(alivePlayers[0].testament)) {
+        setTimeout(() => {
+          if (state === "playing") endGame(false, "survivor-complete");
+        }, 800);
+      }
     }
   }
 
@@ -487,7 +660,29 @@
   }
 
   function onMiss(book) {
-    const owner = players.find(p => p.testament === book.testament);
+    if (gameMode === 1) {
+      const player = players[0];
+      if (!player || !player.alive) return;
+
+      // En 1 jugador solo pierdes vida si se te escapa un libro
+      // del Testamento que el juego te está pidiendo en ese momento.
+      if (book.testament === soloTarget) {
+        takeDamage(
+          player,
+          "¡SE ESCAPÓ!",
+          book.x + book.w / 2,
+          H - 180
+        );
+      }
+
+      requeueBook(book);
+      return;
+    }
+
+    const owner = players.find(
+      p => p.testament === book.testament && p.alive
+    );
+
     if (!owner) return;
 
     takeDamage(
@@ -566,9 +761,11 @@
 
     // Movimiento de jugadores
     for (const p of players) {
+      if (!p.alive) continue;
+
       let dir = 0;
-      if (keys.has(p.leftKey)) dir -= 1;
-      if (keys.has(p.rightKey)) dir += 1;
+      if (keys.has(p.leftKey) || (p.altLeftKey && keys.has(p.altLeftKey))) dir -= 1;
+      if (keys.has(p.rightKey) || (p.altRightKey && keys.has(p.altRightKey))) dir += 1;
 
       p.x += dir * CONFIG.moveSpeed * (dt / 1000);
       p.x = clamp(p.x, 18, W - p.w - 18);
@@ -595,6 +792,8 @@
 
       let caught = false;
       for (const p of players) {
+        if (!p.alive) continue;
+
         const hitbox = {
           x: p.x + p.w * 0.08,
           y: p.y + p.h * 0.15,
@@ -631,6 +830,8 @@
 
       let caught = false;
       for (const p of players) {
+        if (!p.alive) continue;
+
         if (intersects(power, p)) {
           applyPowerUp(p, power, now);
           powerUps.splice(i, 1);
@@ -769,10 +970,17 @@
   // ============================================================
   function drawBible(player, now) {
     const img = player.testament === "old" ? images.oldBible : images.newBible;
-    const color = player.testament === "old" ? "#ffd84d" : "#68b7ff";
-    const glow = player.flashUntil > now ? 26 : 12;
+    const baseColor = player.testament === "old" ? "#ffd84d" : "#68b7ff";
+    const color = player.alive ? baseColor : "#9a9a9a";
+    const glow = player.alive && player.flashUntil > now ? 26 : (player.alive ? 12 : 0);
 
     ctx.save();
+
+    if (!player.alive) {
+      ctx.filter = "grayscale(1) brightness(.58)";
+      ctx.globalAlpha = 0.72;
+    }
+
     ctx.shadowColor = color;
     ctx.shadowBlur = glow;
 
@@ -808,6 +1016,18 @@
     }
 
     ctx.restore();
+
+    if (!player.alive) {
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#d0d0d0";
+      ctx.font = "900 28px Trebuchet MS";
+      ctx.fillText(
+        "ELIMINADO",
+        player.x + player.w / 2,
+        player.y + player.h / 2
+      );
+    }
 
     // etiqueta de jugador/testamento
     ctx.textAlign = "center";
@@ -888,11 +1108,9 @@
   // DRAW: HUD
   // ============================================================
   function drawHUD(now) {
-    // franja superior
     ctx.fillStyle = "rgba(4,6,16,.72)";
     ctx.fillRect(0, 0, W, 148);
 
-    // centro
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 33px Trebuchet MS";
@@ -902,7 +1120,6 @@
     ctx.font = "700 18px Trebuchet MS";
     ctx.fillText(`BIBLIA ${totalCompleted}/66`, W / 2, 76);
 
-    // barra de progreso
     const barW = 470;
     const barH = 17;
     const bx = W / 2 - barW / 2;
@@ -918,12 +1135,34 @@
       ctx.fill();
     }
 
-    drawPlayerHUD(players[0], 56, 24, "left", now);
-    drawPlayerHUD(players[1], W - 56, 24, "right", now);
-
-    // indicadores de conteo
     const oldCount = [...completed].filter(name => OLD_BOOKS.includes(name)).length;
     const newCount = totalCompleted - oldCount;
+
+    if (gameMode === 1) {
+      drawPlayerHUD(players[0], 56, 24, "left", now);
+
+      ctx.textAlign = "right";
+      ctx.fillStyle = soloTarget === "old" ? "#ffd84d" : "#68b7ff";
+      ctx.font = "900 21px Trebuchet MS";
+      ctx.fillText(
+        soloTarget === "old"
+          ? "OBJETIVO • ANTIGUO"
+          : "OBJETIVO • NUEVO",
+        W - 56,
+        38
+      );
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "800 17px Trebuchet MS";
+      ctx.fillText(
+        `Cambio en ${Math.max(0, CONFIG.soloSwitchEvery - soloTargetCaught)} aciertos`,
+        W - 56,
+        70
+      );
+    } else {
+      drawPlayerHUD(players[0], 56, 24, "left", now);
+      drawPlayerHUD(players[1], W - 56, 24, "right", now);
+    }
 
     ctx.textAlign = "left";
     ctx.fillStyle = "#ffd84d";
@@ -940,34 +1179,74 @@
       ctx.font = "900 18px Trebuchet MS";
       ctx.fillText("⏱ TIEMPO LENTO", W / 2, 132);
     }
+
+    if (gameMode === 1 && now < targetBannerUntil) {
+      ctx.globalAlpha = 0.96;
+      ctx.fillStyle = "rgba(4,6,16,.86)";
+      roundedRect(W / 2 - 410, H * 0.24, 820, 128, 24);
+      ctx.fill();
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = soloTarget === "old" ? "#ffd84d" : "#68b7ff";
+      ctx.font = "900 38px Trebuchet MS";
+      ctx.fillText(
+        soloTarget === "old"
+          ? "RECOGE: ANTIGUO TESTAMENTO"
+          : "RECOGE: NUEVO TESTAMENTO",
+        W / 2,
+        H * 0.24 + 53
+      );
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 20px Trebuchet MS";
+      ctx.fillText(
+        "Atrapa solo los libros que pertenezcan a este Testamento.",
+        W / 2,
+        H * 0.24 + 92
+      );
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawPlayerHUD(p, x, y, align, now) {
+    if (!p) return;
+
     ctx.textAlign = align;
 
-    const color = p.testament === "old" ? "#ffd84d" : "#68b7ff";
-    const title = p.testament === "old"
-      ? (gameMode === 2 ? "J1 • ANTIGUO" : "ANTIGUO")
-      : (gameMode === 2 ? "J2 • NUEVO" : "NUEVO");
+    const activeColor = p.testament === "old" ? "#ffd84d" : "#68b7ff";
+    const color = p.alive ? activeColor : "#9b9b9b";
+
+    let title;
+    if (gameMode === 1) {
+      title = "1 JUGADOR";
+    } else {
+      title = p.testament === "old" ? "J1 • ANTIGUO" : "J2 • NUEVO";
+    }
 
     ctx.fillStyle = color;
     ctx.font = "900 22px Trebuchet MS";
     ctx.fillText(title, x, y + 12);
 
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = p.alive ? "#ffffff" : "#aaaaaa";
     ctx.font = "900 38px Trebuchet MS";
     ctx.fillText(formatScore(p.score), x, y + 54);
 
-    const hearts = "❤".repeat(Math.max(0, p.lives));
-    ctx.fillStyle = "#ff5d6e";
-    ctx.font = "26px Arial";
-    ctx.fillText(hearts, x, y + 87);
+    if (p.alive) {
+      const hearts = "❤".repeat(Math.max(0, p.lives));
+      ctx.fillStyle = "#ff5d6e";
+      ctx.font = "26px Arial";
+      ctx.fillText(hearts, x, y + 87);
 
-    const mult = playerMultiplier(p, now);
-    if (mult > 1) {
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 17px Trebuchet MS";
-      ctx.fillText(`COMBO x${mult}`, x, y + 114);
+      const mult = playerMultiplier(p, now);
+      if (mult > 1) {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "900 17px Trebuchet MS";
+        ctx.fillText(`COMBO x${mult}`, x, y + 114);
+      }
+    } else {
+      ctx.fillStyle = "#b6b6b6";
+      ctx.font = "900 18px Trebuchet MS";
+      ctx.fillText("ELIMINADO", x, y + 90);
     }
   }
 
@@ -1036,7 +1315,12 @@
       ctx.textAlign = "center";
       ctx.fillStyle = "#fff";
       ctx.font = "800 24px Trebuchet MS";
-      ctx.fillText("A / D  =  ANTIGUO        ← / →  =  NUEVO", W / 2, H - 174);
+
+      const helpText = gameMode === 1
+        ? "A / D o ← / → = MOVER • ATRAPA SOLO EL TESTAMENTO INDICADO"
+        : "A / D = ANTIGUO        ← / → = NUEVO";
+
+      ctx.fillText(helpText, W / 2, H - 174);
       ctx.globalAlpha = 1;
     }
   }
@@ -1137,4 +1421,3 @@
   players = [];
   requestAnimationFrame(frame);
 })();
-
