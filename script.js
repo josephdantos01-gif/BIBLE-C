@@ -31,7 +31,7 @@
   }
 
   // ============================================================
-  // LIBROS DE LA BIBLIA
+  // LIBROS DE LA BIBLIA zs
   // ============================================================
   const OLD_BOOKS = [
     "Génesis","Éxodo","Levítico","Números","Deuteronomio",
