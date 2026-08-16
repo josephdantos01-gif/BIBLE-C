@@ -1,1 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#080b16" />
+  <title>Bible Drop - Level Up</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="game-shell">
+    <div id="game-frame">
+      <canvas id="game" width="1920" height="1080" aria-label="Bible Drop"></canvas>
 
+      <section id="menu" class="overlay visible">
+        <div class="panel">
+          <div class="eyebrow">LEVEL UP • LA BIBLIA A OTRO NIVEL</div>
+          <h1>BIBLE DROP</h1>
+          <p class="subtitle">Atrapa cada libro con la Biblia del Testamento correcto.</p>
+
+          <div class="mode-grid">
+            <button class="mode-btn" data-mode="1">
+              <span class="mode-icon">👤</span>
+              <strong>1 JUGADOR</strong>
+              <small>Controlas ambas Biblias</small>
+            </button>
+
+            <button class="mode-btn" data-mode="2">
+              <span class="mode-icon">👥</span>
+              <strong>2 JUGADORES</strong>
+              <small>Cada jugador controla una Biblia</small>
+            </button>
+          </div>
+
+          <div class="controls-info">
+            <div><b>Antiguo Testamento:</b> A / D</div>
+            <div><b>Nuevo Testamento:</b> ← / →</div>
+          </div>
+
+          <button id="how-btn" class="ghost-btn">¿CÓMO SE JUEGA?</button>
+        </div>
+      </section>
+
+      <section id="how-panel" class="overlay">
+        <div class="panel compact">
+          <h2>¿CÓMO SE JUEGA?</h2>
+          <p>Caerán hojas con nombres de los 66 libros de la Biblia.</p>
+          <p><b>📜 Antiguo Testamento:</b> recógelo con la Biblia del lado amarillo.</p>
+          <p><b>📖 Nuevo Testamento:</b> recógelo con la Biblia del lado azul.</p>
+          <p>Si recoges un libro incorrecto o dejas caer uno, pierdes una vida.</p>
+          <p>Completa los <b>39 libros del Antiguo</b> y los <b>27 del Nuevo</b>.</p>
+          <button id="how-close" class="primary-btn">ENTENDIDO</button>
+        </div>
+      </section>
+
+      <section id="pause-panel" class="overlay">
+        <div class="panel compact">
+          <h2>PAUSA</h2>
+          <button id="resume-btn" class="primary-btn">CONTINUAR</button>
+          <button id="restart-from-pause" class="ghost-btn">REINICIAR</button>
+          <button id="menu-from-pause" class="ghost-btn">MENÚ</button>
+        </div>
+      </section>
+
+      <section id="end-panel" class="overlay">
+        <div class="panel">
+          <div id="end-kicker" class="eyebrow">FIN DE LA PARTIDA</div>
+          <h2 id="end-title">GAME OVER</h2>
+          <p id="end-message" class="subtitle"></p>
+
+          <div class="result-grid">
+            <div>
+              <small>PUNTUACIÓN</small>
+              <strong id="final-score">0</strong>
+            </div>
+            <div>
+              <small>RÉCORD LOCAL</small>
+              <strong id="best-score">0</strong>
+            </div>
+            <div>
+              <small>LIBROS</small>
+              <strong id="final-books">0/66</strong>
+            </div>
+          </div>
+
+          <button id="play-again" class="primary-btn">JUGAR DE NUEVO</button>
+          <button id="back-menu" class="ghost-btn">VOLVER AL MENÚ</button>
+        </div>
+      </section>
+
+      <button id="pause-btn" class="pause-btn" aria-label="Pausar">Ⅱ</button>
+
+      <div id="touch-controls" aria-hidden="true">
+        <div class="touch-group old">
+          <button data-key="KeyA">◀</button>
+          <span>ANTIGUO</span>
+          <button data-key="KeyD">▶</button>
+        </div>
+        <div class="touch-group new">
+          <button data-key="ArrowLeft">◀</button>
+          <span>NUEVO</span>
+          <button data-key="ArrowRight">▶</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
